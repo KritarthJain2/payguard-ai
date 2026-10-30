@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PayGuard AI — Check Before You Pay</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:#0b1e3a;color:#16233a}
+a{color:#2563eb}.layout{display:flex;min-height:100vh}.sidebar{width:240px;background:#081426;color:#fff;padding:20px;display:flex;flex-direction:column;gap:8px;flex-shrink:0}
+.sidebar h1{font-size:20px;margin:0 0 4px}.sidebar p{color:#b8c6dd;font-size:13px;margin:0 0 16px}
+.navbtn{background:transparent;border:0;color:#e6edf7;text-align:left;padding:11px 12px;border-radius:10px;font-size:15px;cursor:pointer}
+.navbtn.active,.navbtn:hover{background:#1e3a66}.main{flex:1;padding:22px;max-width:980px;margin:0 auto;width:100%}
+.card{background:#fff;border-radius:16px;padding:18px;margin-bottom:16px;box-shadow:0 2px 10px rgba(0,0,0,.18)}
+h2{margin:0 0 10px;font-size:22px}h3{margin:16px 0 8px;font-size:17px}
+label{display:block;font-weight:600;margin:12px 0 4px;font-size:14px}
+input,select,textarea{width:100%;padding:11px;border:1.5px solid #cbd5e1;border-radius:10px;font-size:15px}
+textarea{min-height:150px;resize:vertical}input.invalid,select.invalid,textarea.invalid{border-color:#dc2626}
+.err{color:#b91c1c;font-size:13px;margin-top:4px;min-height:18px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+button.primary{background:#2563eb;color:#fff;border:0;padding:12px 18px;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer}
+button.secondary{background:#e2e8f0;border:0;padding:10px 14px;border-radius:10px;font-size:14px;cursor:pointer}
+button:disabled{opacity:.55;cursor:not-allowed}.badge{display:inline-block;padding:6px 12px;border-radius:999px;font-weight:800;font-size:13px}
+.badge.low{background:#334155;color:#fff}.badge.medium{background:#fef3c7;color:#92400e;border:1px solid #f59e0b}.badge.high{background:#fee2e2;color:#991b1b;border:1px solid #dc2626}
+.flag{border-radius:12px;padding:12px;margin:10px 0;border-left:6px solid #f59e0b;background:#fffbeb}
+.flag.critical,.flag.high{border-left-color:#dc2626;background:#fef2f2}.flag.medium{border-left-color:#f59e0b}
+.flag.low{border-left-color:#64748b;background:#f1f5f9}.flag.evidence{color:#475569;font-size:13px}
+.panel-red{border:2px solid #dc2626;background:#fef2f2;border-radius:12px;padding:14px}
+.panel-amber{border:1px solid #f59e0b;background:#fffbeb;border-radius:12px;padding:14px}
+.panel-green{border:1px solid #16a34a;background:#f0fdf4;border-radius:12px;padding:14px}
+table{width:100%;border-collapse:collapse;font-size:14px}td,th{border-bottom:1px solid #e2e8f0;padding:8px;text-align:left}
+.muted{color:#64748b;font-size:13px}.small{font-size:13px}.hidden{display:none!important}
+.banner{border-radius:12px;padding:12px;margin:12px 0}.banner.error{background:#fef2f2;border:1px solid #dc2626;color:#991b1b}
+.banner.info{background:#eff6ff;border:1px solid #93c5fd}.stat{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.stat div{background:#f1f5f9;border-radius:12px;padding:14px}.stat b{font-size:22px;display:block}
+.bottomnav{display:none}.checklist label{font-weight:400;display:flex;gap:8px;align-items:flex-start}
+.checklist input{width:auto;margin-top:3px}
+@media(max-width:760px){.layout{display:block}.sidebar{display:none}.grid,.stat{grid-template-columns:1fr}.main{padding:14px 14px 86px}
+.bottomnav{display:flex;position:fixed;left:0;right:0;bottom:0;background:#081426;padding:8px;gap:6px;z-index:10}
+.bottomnav button{flex:1;background:transparent;border:0;color:#fff;padding:10px 4px;border-radius:10px}.bottomnav button.active{background:#1e3a66}}
+</style>
+</head>
+<body>
+<div class="layout">
+<aside class="sidebar"><h1>PayGuard AI</h1><p>Check Before You Pay<br><span class="small">Sandbox tests only. No real money.</span></p>
+<button class="navbtn active" data-nav="dashboard">Dashboard</button>
+<button class="navbtn" data-nav="check">Check invoice</button>
+<button class="navbtn" data-nav="history">History</button>
+<button class="navbtn" data-nav="about">About &amp; limits</button>
+</aside>
+<main class="main">
+<section id="screen-dashboard" class="screen">
+<div class="card"><h2>Check Before You Pay</h2><p>Paste an invoice or payment message, check it before you pay, and only then use a verified PayPal Sandbox checkout — if the amount and currency match your original quote.</p>
+<div class="stat"><div><b id="stat-checks">0</b>Checks run</div><div><b id="stat-high">0</b>High risk</div><div><b id="stat-blocked">0</b>Checks blocked</div></div>
+<p><button class="primary" onclick="showScreen('check')">Check a new invoice</button></p>
+<div id="config-note" class="banner info hidden"></div></div>
+<div class="card"><h3>Recent checks</h3><div id="recent-list" class="muted">No checks yet in this browser.</div></div>
+</section>
+
+<section id="screen-check" class="screen hidden">
+<div class="card"><h2>Invoice analysis</h2>
+<p class="muted">The invoice text is sent to the server for analysis. It is not stored server-side as raw text in this version. Analysis is a heuristic, not a fraud probability, and cannot prove a seller is legitimate.</p>
+<form id="check-form" novalidate>
+<label for="invoice-text">Invoice or payment request text *</label>
+<textarea id="invoice-text" placeholder="Paste the full invoice or payment message here…"></textarea><div class="err" id="err-invoice-text"></div>
+<div class="grid">
+<div><label for="agreed-amount">Original agreed amount *</label><input id="agreed-amount" inputmode="decimal" placeholder="50.00"><div class="err" id="err-agreed-amount"></div></div>
+<div><label for="agreed-currency">Currency *</label><select id="agreed-currency"><option value="">Select…</option><option>USD</option><option>INR</option><option>EUR</option><option>GBP</option></select><div class="err" id="err-agreed-currency"></div></div>
+</div>
+<div class="grid">
+<div><label for="invoice-amount">Invoice amount (if separately provided)</label><input id="invoice-amount" inputmode="decimal" placeholder="Leave blank to extract from text"><div class="err" id="err-invoice-amount"></div></div>
+<div><label for="invoice-currency">Invoice currency (optional)</label><select id="invoice-currency"><option value="">Use text / agreed currency</option><option>USD</option><option>INR</option><option>EUR</option><option>GBP</option></select><div class="err" id="err-invoice-currency"></div></div>
+</div>
+<div class="grid">
+<div><label for="sender-name">Sender name</label><input id="sender-name" placeholder="e.g. Sharma Designs"></div>
+<div><label for="expected-merchant">Expected merchant name</label><input id="expected-merchant" placeholder="Merchant you expected"></div>
+</div>
+<label for="payment-link">Optional payment link text</label><input id="payment-link" placeholder="Paste a payment link, if any — it will be inspected as text and never opened"><div class="err" id="err-payment-link"></div>
+<p><button class="primary" id="analyze-btn" type="submit" disabled>Analyze Payment</button>
+<button class="secondary" type="button" onclick="loadSample('clean')">Try clean sample</button>
+<button class="secondary" type="button" onclick="loadSample('suspicious')">Try suspicious sample</button></p>
+<div id="form-banner"></div>
+</form></div>
+</section>
+
+<section id="screen-review" class="screen hidden">
+<div class="card"><h2>Review extracted details</h2><p class="muted">Correct anything that was extracted wrong, then re-run the analysis. The server will re-check the corrected details.</p>
+<div id="review-fields"></div>
+<p><button class="primary" id="rerun-btn">Re-run analysis with corrections</button> <button class="secondary" onclick="showScreen('check')">Back to form</button></p>
+<div id="review-banner"></div></div>
+</section>
+
+<section id="screen-report" class="screen hidden">
+<div class="card"><div id="report-top"></div><div id="report-body"></div>
+<p><button class="secondary" onclick="showScreen('check')">Back to form — inputs preserved</button>
+<button class="secondary" onclick="showScreen('review')">Correct extracted details &amp; rerun</button>
+<button class="secondary" onclick="showScreen('check');document.getElementById('check-form').reset();clearState();">Check another</button></p></div>
+<div class="card" id="payment-card"><h3>PayPal Sandbox payment</h3><div id="payment-body" class="muted">Payment is available only when the server gate passes.</div></div>
+</section>
+
+<section id="screen-history" class="screen hidden">
+<div class="card"><h2>History</h2><p class="muted">Stored only in this browser. Summaries only — raw invoice text is not saved here.</p><div id="history-list"></div><p><button class="secondary" onclick="clearHistory()">Clear history</button></p></div>
+</section>
+
+<section id="screen-about" class="screen hidden">
+<div class="card"><h2>About &amp; limits</h2>
+<p>PayGuard AI checks an invoice before you pay. A low score does not mean "safe", and a high score does not prove fraud. The score is a heuristic, not a statistically validated fraud probability. Verification passing means only that the required checks passed — it does not prove the seller is legitimate.</p>
+<p>All PayPal transactions in this app are Sandbox tests. No production credentials and no real money are used. Links in invoices are inspected as text and never opened. Instructions hidden inside an invoice are flagged, not followed.</p>
+<h3>Setup instructions (when credentials are missing)</h3>
+<ul><li>AI: set <code>PAYGUARD_AI_API_KEY</code> in Vercel Environment Variables (Production), optionally <code>PAYGUARD_AI_BASE_URL</code> and <code>PAYGUARD_AI_MODEL</code> (default Groq, openai/gpt-oss-120b), then redeploy.</li>
+<li>PayPal Sandbox: set <code>PAYPAL_SANDBOX_CLIENT_ID</code> and <code>PAYPAL_SANDBOX_CLIENT_SECRET</code> in Vercel Environment Variables (Production), optionally <code>PAYPAL_SANDBOX_BASE_URL</code> (default https://api-m.sandbox.paypal.com), then redeploy.</li>
+<li>Never paste keys in chat, frontend code, or the repo. Never use production PayPal credentials.</li></ul>
+<div id="about-config" class="banner info">Checking configuration…</div>
+</div>
+</section>
+</main>
+</div>
+<nav class="bottomnav">
+<button class="active" data-nav="dashboard">Dashboard</button><button data-nav="check">Check</button><button data-nav="history">History</button><button data-nav="about">About</button>
+</nav>
+<script>
+const $ = (id) => document.getElementById(id);
+let lastRequest = null, lastReport = null, pendingQuote = null;
+function showScreen(name){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.add('hidden'));
+  const el = $('screen-'+name); if(el) el.classList.remove('hidden');
+  document.querySelectorAll('[data-nav]').forEach(b=>b.classList.toggle('active', b.dataset.nav===name));
+  if(name==='dashboard') renderDashboard();
+  if(name==='history') renderHistory();
+  if(name==='about') loadConfig();
+}
+document.querySelectorAll('[data-nav]').forEach(b=>b.addEventListener('click',()=>showScreen(b.dataset.nav)));
+function parseCents(v){
+  if(v===undefined||v===null||String(v).trim()==='') return {ok:false,error:'empty'};
+  const s=String(v).trim().replace(/,/g,'').replace(/^(USD|EUR|GBP|INR|Rs\.?|₹|\$|€|£)\s*/i,'');
+  if(/^-/.test(s)) return {ok:false,error:'negative'};
+  if(!/^\d+(\.\d{1,2})?$/.test(s)) return {ok:false,error:'invalid'};
+  const p=s.split('.'); const cents=parseInt(p[0],10)*100+parseInt((p[1]||'').padEnd(2,'0'),10);
+  if(cents<=0) return {ok:false,error:'not_positive'};
+  return {ok:true,cents};
+}
+function setErr(id,msg,fieldId){ $(id).textContent=msg||''; if(fieldId) $(fieldId).classList.toggle('invalid',!!msg); }
+function validateForm(){
+  let valid=true;
+  const text=$('invoice-text').value.trim();
+  setErr('err-invoice-text', text?'':'Invoice or payment request text is required.','invoice-text'); if(!text) valid=false;
+  const a=parseCents($('agreed-amount').value);
+  setErr('err-agreed-amount', a.ok?'':(a.error==='negative'?'Amount must not be negative.':a.error==='not_positive'?'Amount must be greater than zero.':'Enter a valid amount with at most 2 decimal places.'),'agreed-amount'); if(!a.ok) valid=false;
+  const cur=$('agreed-currency').value;
+  setErr('err-agreed-currency', ['USD','INR','EUR','GBP'].includes(cur)?'':'Select USD, INR, EUR or GBP.','agreed-currency'); if(!cur) valid=false;
+  const inv=$('invoice-amount').value.trim();
+  if(inv){ const p=parseCents(inv); setErr('err-invoice-amount', p.ok?'':'Enter a valid amount with at most 2 decimal places.','invoice-amount'); if(!p.ok) valid=false; } else setErr('err-invoice-amount','','invoice-amount');
+  const ic=$('invoice-currency').value;
+  setErr('err-invoice-currency', (!ic||['USD','INR','EUR','GBP'].includes(ic))?'':'Unsupported currency.','invoice-currency'); if(ic && !['USD','INR','EUR','GBP'].includes(ic)) valid=false;
+  const link=$('payment-link').value.trim();
+  if(link && !/^https?:\/\//i.test(link) && !/^[a-z0-9.-]+\.[a-z]{2,}/i.test(link)){ setErr('err-payment-link','Enter a valid link, or leave this blank.','payment-link'); valid=false; } else setErr('err-payment-link','','payment-link');
+  $('analyze-btn').disabled=!valid;
+  return valid;
+}
+['invoice-text','agreed-amount','agreed-currency','invoice-amount','invoice-currency','sender-name','expected-merchant','payment-link'].forEach(id=>{
+  const el=$(id); el.addEventListener('input',validateForm); el.addEventListener('change',validateForm);
+});
+function loadSample(kind){
+  if(kind==='clean'){
+    $('invoice-text').value='Invoice from Sharma Designs for logo work. Total: $50.00 USD, due Friday 6 November. Please pay via PayPal.';
+    $('agreed-amount').value='50.00'; $('agreed-currency').value='USD'; $('invoice-amount').value=''; $('sender-name').value='Sharma Designs'; $('expected-merchant').value='Sharma Designs'; $('payment-link').value='';
+  } else {
+    $('invoice-text').value='URGENT! Pay $80 immediately or your account will be closed. Do not tell anyone. Pay to a new account via bit.ly/pay-now-fast. Invoice from Sharma Designs.';
+    $('agreed-amount').value='50.00'; $('agreed-currency').value='USD'; $('invoice-amount').value='80.00'; $('sender-name').value='Sharma Designs'; $('expected-merchant').value='Sharma Designs'; $('payment-link').value='https://bit.ly/pay-now-fast';
+  }
+  validateForm();
+}
+function getHistory(){ try{return JSON.parse(localStorage.getItem('payguard_history_v1')||'[]')}catch{return[]} }
+function saveHistory(item){ const h=getHistory(); h.unshift(item); localStorage.setItem('payguard_history_v1', JSON.stringify(h.slice(0,50))); }
+function clearHistory(){ localStorage.removeItem('payguard_history_v1'); renderHistory(); renderDashboard(); }
+function clearState(){ lastReport=null; }
+function renderDashboard(){
+  const h=getHistory();
+  $('stat-checks').textContent=h.length;
+  $('stat-high').textContent=h.filter(x=>x.level==='high').length;
+  $('stat-blocked').textContent=h.filter(x=>x.blocked).length;
+  $('recent-list').innerHTML=h.length?h.slice(0,5).map(x=>'<div>'+escapeHtml(x.merchant||x.sender||'Invoice')+' — '+escapeHtml(x.amount||'')+' — '+escapeHtml(x.level||'')+' '+(x.blocked?'(blocked)':'')+'</div>').join(''):'No checks yet in this browser.';
+}
+function renderHistory(){
+  const h=getHistory();
+  $('history-list').innerHTML=h.length?h.map((x,i)=>'<div style="border-bottom:1px solid #e2e8f0;padding:8px 0">'+escapeHtml(x.date||'')+' — '+escapeHtml(x.merchant||x.sender||'Invoice')+' — '+escapeHtml(x.amount||'')+' — '+escapeHtml(x.level||'')+' '+(x.blocked?'— blocked':'')+' <button class="secondary" onclick="loadHistory('+i+')">View</button></div>').join(''):'No history yet.';
+}
+function loadHistory(i){ const item=getHistory()[i]; if(!item||!item.report) return; lastReport=item.report; renderReport(item.report); showScreen('report'); }
+function escapeHtml(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+async function loadConfig(){
+  try{ const r=await fetch('/api/health'); const j=await r.json();
+    $('about-config').innerHTML='AI configured: '+(j.aiConfigured?'yes':'no')+'<br>PayPal Sandbox configured: '+(j.paypalConfigured?'yes':'no')+'<br>Sandbox base: '+escapeHtml(j.paypalBaseUrl||'')+'<br><span class="muted">Only booleans are shown here — no secret is ever exposed.</span>';
+    if(!j.aiConfigured||!j.paypalConfigured){ $('config-note').classList.remove('hidden'); $('config-note').innerHTML='Setup needed: '+(j.setupInstructions?j.setupInstructions.slice(0,2).join(' '):'Set the env vars listed on the About page and redeploy.'); }
+  }catch{ $('about-config').textContent='Could not load configuration. Try again.'; }
+}
+$('check-form').addEventListener('submit', async (e)=>{
+  e.preventDefault(); if(!validateForm()) return;
+  const req={ invoiceText:$('invoice-text').value, agreedAmount:$('agreed-amount').value, agreedCurrency:$('agreed-currency').value,
+    invoiceAmount:$('invoice-amount').value||undefined, invoiceCurrency:$('invoice-currency').value||undefined,
+    senderName:$('sender-name').value||undefined, expectedMerchant:$('expected-merchant').value||undefined, paymentLink:$('payment-link').value||undefined };
+  lastRequest=req; await runAnalyze(req, false);
+});
+async function runAnalyze(req, fromReview){
+  $('form-banner').innerHTML='<div class="banner info">Analyzing… please wait. The server is checking the invoice and running the rule layer.</div>';
+  $('analyze-btn').disabled=true;
+  try{
+    const r=await fetch('/api/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(req)});
+    const j=await r.json().catch(()=>({}));
+    if(!r.ok || !j.ok){
+      let html='<div class="banner error"><b>'+escapeHtml(j.error||'Analysis failed')+'</b><br>'+escapeHtml(j.message||'No verdict was fabricated. Try again.')+'</div>';
+      if(j.setupInstructions) html+='<div class="panel-amber"><b>Setup instructions</b><ul>'+j.setupInstructions.map(s=>'<li>'+escapeHtml(s)+'</li>').join('')+'</ul></div>';
+      html+='<p><button class="primary" onclick="runAnalyze(lastRequest,false)">Retry analysis</button></p>';
+      $('form-banner').innerHTML=html; $('analyze-btn').disabled=false; validateForm(); return;
+    }
+    lastReport=j;
+    saveHistory({date:new Date().toLocaleString(), level:j.riskLevel, blocked:!!(j.gate&&j.gate.blocked), merchant:j.extracted&&j.extracted.merchant, sender:j.extracted&&j.extracted.sender, amount:j.extracted&&j.extracted.amount, report:j});
+    renderReview(j); showScreen('review'); $('form-banner').innerHTML='';
+  }catch(err){
+    $('form-banner').innerHTML='<div class="banner error"><b>Network or server error.</b> No verdict was fabricated.<p><button class="primary" onclick="runAnalyze(lastRequest,false)">Retry analysis</button></p></div>';
+  } finally { $('analyze-btn').disabled=false; validateForm(); }
+}
+function renderReview(report){
+  const e=report.extracted||{};
+  $('review-fields').innerHTML=
+    '<label>Extracted sender</label><input id="rev-sender" value="'+escapeHtml(e.sender||'')+'">'+
+    '<label>Extracted merchant</label><input id="rev-merchant" value="'+escapeHtml(e.merchant||'')+'">'+
+    '<label>Extracted invoice amount</label><input id="rev-amount" value="'+escapeHtml(e.amount||'')+'">'+
+    '<label>Extracted currency</label><select id="rev-currency"><option>USD</option><option>INR</option><option>EUR</option><option>GBP</option></select>'+
+    '<label>Due date</label><input id="rev-due" value="'+escapeHtml(e.dueDate||'')+'">'+
+    '<label>Payment URL</label><input id="rev-url" value="'+escapeHtml(e.paymentUrl||'')+'">';
+  $('rev-currency').value=e.currency||lastRequest.agreedCurrency;
+  $('review-banner').innerHTML='<p class="muted">Risk in this draft: '+escapeHtml(report.riskLevel)+' ('+escapeHtml(report.riskScore)+'/100, heuristic only). Correct the fields above and re-run to get the final report.</p>';
+  $('rerun-btn').onclick=async ()=>{
+    const req={...lastRequest, invoiceAmount:$('rev-amount').value||undefined, invoiceCurrency:$('rev-currency').value,
+      senderName:$('rev-sender').value||undefined, expectedMerchant:$('rev-merchant').value||undefined, paymentLink:$('rev-url').value||undefined };
+    lastRequest=req;
+    // Re-run via the form path, then go straight to the report.
+    $('review-banner').innerHTML='<div class="banner info">Re-running analysis with corrections…</div>';
+    try{
+      const r=await fetch('/api/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(req)});
+      const j=await r.json().catch(()=>({}));
+      if(!r.ok||!j.ok){ $('review-banner').innerHTML='<div class="banner error">Re-run failed: '+escapeHtml(j.message||j.error||'unknown')+' <button class="secondary" onclick="showScreen(\'check\')">Back to form</button></div>'; return; }
+      lastReport=j; renderReport(j); showScreen('report');
+    }catch{ $('review-banner').innerHTML='<div class="banner error">Network error. Try again.</div>'; }
+  };
+}
+function renderReport(report){
+  const e=report.extracted||{}, gate=report.gate||{};
+  const badgeClass=report.riskLevel==='high'?'high':report.riskLevel==='medium'?'medium':'low';
+  const badgeLabel=report.riskLevel==='high'?'High risk':report.riskLevel==='medium'?'Medium risk — unresolved warnings':'Low detected risk';
+  let top='<span class="badge '+badgeClass+'">'+badgeLabel+'</span> <b>'+escapeHtml(report.riskScore)+'/100</b>';
+  top+='<p class="muted">Heuristic score only. It is not a statistically validated fraud probability. A low score is not a "safe" badge.</p>';
+  if(gate.blocked) top+='<div class="panel-red"><b>Payment blocked</b><br>'+gate.reasons.map(r=>escapeHtml(r.message)).join('<br>')+'</div>';
+  $('report-top').innerHTML=top;
+  let body='<h3>Flags</h3>';
+  if(!report.flags||!report.flags.length) body+='<p>No flags were detected in this check. That does not mean the invoice is safe or the seller is verified.</p>';
+  else body+=report.flags.map(f=>'<div class="flag '+escapeHtml(f.severity)+'"><b>'+escapeHtml(f.id)+'</b> — '+escapeHtml(f.severity)+' ('+escapeHtml(f.points||0)+' points, '+(f.source||'rule')+')<br>'+escapeHtml(f.explanation||'')+'<div class="evidence">Evidence: '+escapeHtml(f.evidence||'—')+'</div></div>').join('');
+  body+='<h3>Missing or could not be verified</h3>';
+  body+='<div class="panel-amber">'+((report.missing&&report.missing.length)?escapeHtml(report.missing.join(', ')):'No missing details listed in this result. Details not listed here are still not verified by a reliable source unless stated below.')+'</div>';
+  body+='<h3>What was checked</h3><table><tr><th>Check</th><th>Status</th></tr>';
+  const amountPass = gate && !gate.blocked || (report.agreed && e.amountCents===report.agreed.amountCents);
+  body+='<tr><td>Amount matches agreed quote</td><td>'+(e.amountCents!==null && report.agreed && e.amountCents===report.agreed.amountCents?'<span style="color:#15803d;font-weight:700">Passed</span>':'<span style="color:#b91c1c;font-weight:700">Detected mismatch / not passed</span>')+'</td></tr>';
+  body+='<tr><td>Currency matches agreed currency</td><td>'+(e.currency===report.agreed.currency?'<span style="color:#15803d;font-weight:700">Passed</span>':'<span style="color:#b91c1c;font-weight:700">Detected mismatch / not passed</span>')+'</td></tr>';
+  body+='<tr><td>Urgency / threat / secrecy</td><td>'+(report.flags&&report.flags.some(f=>['urgency','threat','secrecy'].includes(f.id))?'<span style="color:#b45309;font-weight:700">Detected</span>':'Not detected')+'</td></tr>';
+  body+='<tr><td>Verified by a reliable source</td><td>Not verified — no check in this app has this status. Verify independently.</td></tr>';
+  body+='<tr><td>Other details</td><td>'+(report.missing&&report.missing.length?'Not verified: '+escapeHtml(report.missing.join(', ')):'Not verified by a reliable source')+'</td></tr></table>';
+  body+='<h3>Sender &amp; merchant comparison</h3><table><tr><th>Field</th><th>Value</th></tr><tr><td>Sender (extracted)</td><td>'+escapeHtml(e.sender||'—')+'</td></tr><tr><td>Expected merchant</td><td>'+escapeHtml(lastRequest&&lastRequest.expectedMerchant||e.merchant||'—')+'</td></tr><tr><td>Merchant (extracted)</td><td>'+escapeHtml(e.merchant||'—')+'</td></tr></table>';
+  body+='<h3>Amount comparison</h3><table><tr><th></th><th>Amount</th><th>Currency</th></tr><tr><td>Original agreed</td><td>'+escapeHtml(report.agreed?report.agreed.formatted:'—')+'</td><td>'+escapeHtml(report.agreed?report.agreed.currency:'—')+'</td></tr><tr><td>Invoice</td><td>'+escapeHtml(e.amount||'—')+'</td><td>'+escapeHtml(e.currency||'—')+'</td></tr><tr><td>Difference</td><td style="color:'+(gate.differenceCents?'#b91c1c':'#15803d')+';font-weight:700">'+(gate.differenceCents?('Difference: '+gate.differenceCents+' cents'):'No difference')+'</td><td>—</td></tr></table>';
+  if(gate.blocked) body+='<div class="panel-red"><b>Mismatch</b><br>Expected: '+escapeHtml(gate.expectedAmount!==null?String(gate.expectedAmount)+' cents':'—')+' '+escapeHtml(gate.expectedCurrency||'')+'<br>Submitted: '+escapeHtml(gate.submittedAmount!==null?String(gate.submittedAmount)+' cents':'—')+' '+escapeHtml(gate.submittedCurrency||'')+'<br>Difference: '+escapeHtml(gate.differenceCents!==null?String(gate.differenceCents)+' cents':'—')+'</div>';
+  body+='<h3>Actions to take before paying <span id="check-count"></span></h3><div class="checklist" id="checklist">';
+  const actions=report.verificationActions||['Compare the invoice amount and currency with your original quote before any payment.'];
+  body+=actions.map((a,i)=>'<label><input type="checkbox" onchange="updateCheckCount()"> '+escapeHtml(a)+'</label>').join('');
+  body+='</div><p class="muted">Completing this checklist does not unblock a payment. Only a passing server gate does, and even then it does not prove the seller is legitimate.</p>';
+  body+='<p class="muted">Uncertainty: '+escapeHtml(report.uncertainty||'')+'</p><p class="muted">'+escapeHtml(report.disclaimer||'')+'</p>';
+  if(report.aiStatus && report.aiStatus!=='ok') body+='<div class="panel-amber"><b>No AI verdict</b><br>AI status: '+escapeHtml(report.aiStatus)+'. This result uses deterministic rules only. <button class="secondary" onclick="runAnalyze(lastRequest,false)">Retry analysis</button></div>';
+  $('report-body').innerHTML=body;
+  updateCheckCount();
+  renderPayment(report);
+}
+function updateCheckCount(){ const boxes=document.querySelectorAll('#checklist input[type=checkbox]'); const done=[...boxes].filter(b=>b.checked).length; const el=$('check-count'); if(el) el.textContent='('+done+' of '+boxes.length+' done)'; }
+function renderPayment(report){
+  const gate=report.gate||{};
+  if(gate.blocked){ $('payment-body').innerHTML='<div class="panel-red"><b>PayPal Sandbox checkout is blocked.</b><br>Correct the details and re-run the analysis. A blocked mismatch cannot be dismissed to proceed.</div>'; return; }
+  if(!report.agreed){ $('payment-body').innerHTML='No verified quote available.'; return; }
+  pendingQuote={amount:report.agreed.formatted, currency:report.agreed.currency, amountCents:report.agreed.amountCents};
+  $('payment-body').innerHTML='<div class="panel-green"><b>Gate passed — checks passed only.</b> This does not prove the seller is legitimate.</div><p>Payable (server-validated quote): <b>'+escapeHtml(report.agreed.formatted)+'</b></p><p><button class="primary" onclick="startPayPal()">Proceed to PayPal Sandbox</button></p><div id="paypal-result"></div><p class="muted">Sandbox test only. No real money.</p>';
+}
+async function startPayPal(){
+  if(!lastRequest||!lastReport) return;
+  $('paypal-result').innerHTML='<div class="banner info">Creating Sandbox order… the server is re-running the gate first.</div>';
+  const req={...lastRequest, agreedAmount:lastReport.agreed.formatted, agreedCurrency:lastReport.agreed.currency};
+  // Send amounts as plain numbers for the PayPal endpoint's cents parser.
+  req.agreedAmount=String(lastReport.agreed.amountCents/100); req.invoiceAmount=lastReport.extracted.amountCents!==null?String(lastReport.extracted.amountCents/100):undefined;
+  try{
+    const r=await fetch('/api/paypal/create',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(req)});
+    const j=await r.json().catch(()=>({}));
+    if(!r.ok||!j.ok){
+      let html='<div class="panel-red"><b>Checkout blocked / not configured</b><br>'+escapeHtml(j.message||j.error||'Unknown error')+'</div>';
+      if(j.gate) html+='<p>Expected: '+escapeHtml(j.gate.expectedAmount)+' cents '+escapeHtml(j.gate.expectedCurrency)+' — Submitted: '+escapeHtml(j.gate.submittedAmount)+' cents '+escapeHtml(j.gate.submittedCurrency)+' — Difference: '+escapeHtml(j.gate.differenceCents)+' cents</p>';
+      if(j.setupInstructions) html+='<div class="panel-amber"><b>Setup instructions</b><ul>'+j.setupInstructions.map(s=>'<li>'+escapeHtml(s)+'</li>').join('')+'</ul></div>';
+      html+='<p><button class="secondary" onclick="startPayPal()">Retry</button></p>';
+      $('paypal-result').innerHTML=html; return;
+    }
+    try{ sessionStorage.setItem('payguard_pending_order', JSON.stringify({orderId:j.orderId, quote:lastReport.agreed})); }catch{}
+    $('paypal-result').innerHTML='<p><b>Sandbox order created.</b> Order ID: '+escapeHtml(j.orderId)+'</p><p><a href="'+escapeHtml(j.approvalUrl)+'" target="_blank" rel="noopener"><button class="primary">Open PayPal Sandbox approval</button></a></p><p class="muted">After approving on PayPal, return here — capture will be confirmed by the server, not by the redirect. If you already returned, click below.</p><p><button class="secondary" onclick="capturePayPal(\''+escapeHtml(j.orderId)+'\')">Confirm capture with server</button></p>';
+  }catch{ $('paypal-result').innerHTML='<div class="banner error">Network error. No payment was made. <button class="secondary" onclick="startPayPal()">Retry</button></div>'; }
+}
+async function capturePayPal(orderId){
+  $('paypal-result').innerHTML='<div class="banner info">Confirming capture with PayPal via the server…</div>';
+  try{
+    const pending=(()=>{try{return JSON.parse(sessionStorage.getItem('payguard_pending_order')||'{}')}catch{return{}}})();
+    const r=await fetch('/api/paypal/capture',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({orderId, expectedQuote:pending.quote||lastReport.agreed})});
+    const j=await r.json().catch(()=>({}));
+    if(j.captured||j.alreadyCaptured){ $('paypal-result').innerHTML='<div class="panel-green"><b>Sandbox capture confirmed by PayPal.</b><br>Order: '+escapeHtml(orderId)+'<br>Capture: '+escapeHtml(j.captureId||'already captured')+'<br>Amount: '+escapeHtml(j.amount||'')+'</div><p class="muted">Sandbox test only. No real money was processed.</p>'; }
+    else { $('paypal-result').innerHTML='<div class="panel-red"><b>Capture not confirmed.</b><br>'+escapeHtml(j.message||j.error||'Unknown error')+'</div><p><button class="secondary" onclick="capturePayPal(\''+escapeHtml(orderId)+'\')">Retry capture check</button></p>'; }
+  }catch{ $('paypal-result').innerHTML='<div class="banner error">Network error. No success is shown.</div>'; }
+}
+window.addEventListener('load', ()=>{
+  validateForm(); renderDashboard(); loadConfig();
+  const params=new URLSearchParams(window.location.search);
+  const token=params.get('token');
+  if(token){ showScreen('report'); const el=$('payment-body'); if(el) el.innerHTML='<div class="banner info">Returned from PayPal Sandbox. Confirming capture with the server…</div>'; capturePayPal(token); }
+  if(params.get('paypal')==='cancelled'){ showScreen('report'); $('payment-body').innerHTML='<div class="panel-amber"><b>PayPal approval was cancelled.</b> No payment was made.</div>'; }
+});
+</script>
+</body>
+</html>

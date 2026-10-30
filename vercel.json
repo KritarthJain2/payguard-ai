@@ -1,0 +1,1 @@
+{"functions":{"api/analyze.js":{"maxDuration":60},"api/paypal/capture.js":{"maxDuration":60},"api/paypal/create.js":{"maxDuration":60}}}

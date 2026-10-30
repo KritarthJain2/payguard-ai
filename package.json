@@ -1,0 +1,1 @@
+{"description":"PayGuard AI — Check Before You Pay, Vercel version. Sandbox tests only, no real money.","engines":{"node":">=18"},"name":"payguard-vercel","private":true,"scripts":{"test":"node test/run-tests.js"},"version":"1.0.0"}
